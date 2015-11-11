@@ -45,41 +45,27 @@ var randInt = function(range) {
 ////////////////////////////////////////////////////////////////////////////////////////////
 // get some of our canvas elements that we need
 var canvas = <HTMLCanvasElement>document.getElementById("webgl");  
+var desc = <HTMLDivElement>document.getElementById("desc");
 
-window["onEffect1"] = () => {
-    console.log("install effect1!");
-    
-  //////////////
-  ///////// YOUR CODE HERE TO cause the program to use your first shader effect
-  ///////// (you can probably just use some sort of global variable to indicate which effect)
-  //////////////
+var currentShader = 1;
+window["onEffect1"] = () => {  
+  desc.innerText = "My mandelbrot texture! Uses 20 iterations, implemented in a4-shader1.frag."
+    currentShader = 1;
 } 
 
 window["onEffect2"] = () => {
-    console.log("install effect2!");
-    
-  //////////////
-  ///////// YOUR CODE HERE TO cause the program to use your second shader effect
-  ///////// (you can probably just use some sort of global variable to indicate which effect)
-  //////////////
+  desc.innerText = "Swiss cheese! Uses the basic a3 shader but discards vertices within a few specified circles. Implemented in a4-shader2.frag."     
+    currentShader = 2;
 } 
 
 window["onEffect3"] = () => {
-    console.log("install effect3!");
-    
-  //////////////
-  ///////// YOUR CODE HERE TO cause the program to use your third shader effect
-  ///////// (you can probably just use some sort of global variable to indicate which effect)
-  //////////////
+  desc.innerText = "Ewan McGregor in space! If the average of g - r and g - b from the green screen texture is over 0.15, we use the space texture at that point instead. Implemented in a4-shader3.frag."
+   currentShader = 3;
 } 
 
 window["onEffect4"] = () => {
-    console.log("install effect4!");
-    
-  //////////////
-  ///////// YOUR CODE HERE TO cause the program to use your fourth shader effect
-  ///////// (you can probably just use some sort of global variable to indicate which effect)
-  //////////////
+  desc.innerText = "Warble! The y value varies depending on the sine of the point's x coordinate + time. Implemented in a4-shader4.vert."
+    currentShader = 4;
 } 
 
 ////////////////////////////////////////////////////////////////////////////////////////////
@@ -163,36 +149,56 @@ function initWebGL() {
   // attempt to download and set up our GLSL shaders.  When they download, processed to the next step
   // of our program, the "main" routing
   // 
-  // YOU SHOULD MODIFY THIS TO DOWNLOAD ALL YOUR SHADERS and set up all four SHADER PROGRAMS,
-  // THEN PASS AN ARRAY OF PROGRAMS TO main().  You'll have to do other things in main to deal
-  // with multiple shaders and switch between them
-  loader.loadFiles(['shaders/a3-shader.vert', 'shaders/a3-shader.frag'], function (shaderText) {
-    var program = createProgramFromSources(gl, shaderText);
-    main(gl, program);
+  loader.loadFiles(['shaders/a4-shader1.vert', 'shaders/a4-shader1.frag',
+                    'shaders/a4-shader2.vert', 'shaders/a4-shader2.frag',
+                    'shaders/a4-shader3.vert', 'shaders/a4-shader3.frag',
+                    'shaders/a4-shader4.vert', 'shaders/a4-shader4.frag'], function (shaderText) {
+    var program1 = createProgramFromSources(gl, [shaderText[0], shaderText[1]]);
+    var program2 = createProgramFromSources(gl, [shaderText[2], shaderText[3]]);
+    var program3 = createProgramFromSources(gl, [shaderText[4], shaderText[5]]);
+    var program4 = createProgramFromSources(gl, [shaderText[6], shaderText[7]]);
+    main(gl, [program1, program2, program3, program4]);
   }, function (url) {
       alert('Shader failed to download "' + url + '"');
   }); 
 }
 
+var clock = 0;
 ////////////////////////////////////////////////////////////////////////////////////////////
 // webGL is set up, and our Shader program has been created.  Finish setting up our webGL application       
-function main(gl: WebGLRenderingContext, program: WebGLProgram) {
+function main(gl: WebGLRenderingContext, program: WebGLProgram[]) {
   
   // use the webgl-utils library to create setters for all the uniforms and attributes in our shaders.
   // It enumerates all of the uniforms and attributes in the program, and creates utility functions to 
   // allow "setUniforms" and "setAttributes" (below) to set the shader variables from a javascript object. 
   // The objects have a key for each uniform or attribute, and a value containing the parameters for the
   // setter function
-  var uniformSetters = createUniformSetters(gl, program);
-  var attribSetters  = createAttributeSetters(gl, program);
+
+  //var uniformSetters = createUniformSetters(gl, program);
+  //var attribSetters  = createAttributeSetters(gl, program);
 
   // an indexed quad
   var arrays = {
-     position: { numComponents: 3, data: [0, 0, 0, 10, 0, 0, 0, 10, 0, 10, 10, 0], },
-     texcoord: { numComponents: 2, data: [0, 0, 1, 0, 0, 1, 1, 1],                 },
-     normal:   { numComponents: 3, data: [0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1], },
-     indices:  { numComponents: 3, data: [0, 1, 2, 1, 3, 2],                       },
+     position: { numComponents: 3, data: [], },
+     texcoord: { numComponents: 2, data: [], },
+     normal:   { numComponents: 3, data: [], },
+     indices:  { numComponents: 3, data: [], },
   };
+  //Sets up quad to have 16 x 16 vertices
+  for (var i = 0; i < 16; i++) {
+    for (var j = 0; j < 16; j++) {
+      arrays.position.data.push(i*(10/16), j*(10/16), 0);
+      arrays.normal.data.push(0, 0, -1);
+      arrays.texcoord.data.push(1-(i/16), 1-(j/16));
+    }
+  }
+  for (var i = 0; i < 15; i++) {
+    for (var j = 0; j < 15; j++) {
+      arrays.indices.data.push(i+j*16, i+j*16+1, i+((j+1)*16));
+      arrays.indices.data.push(i+j*16+1, (j+1)*16+i, (j+1)*16+i+1);
+    }
+  }
+
   var center = [5,5,0];
   var scaleFactor = 20;
   
@@ -210,7 +216,12 @@ function main(gl: WebGLRenderingContext, program: WebGLProgram) {
     u_lightWorldPos:         [50, 30, -100],
     u_viewInverse:           mat4.create(),
     u_lightColor:            [1, 1, 1, 1],
-    u_ambient:               [0.1, 0.1, 0.1, 0.1]
+    u_ambient:               [0.1, 0.1, 0.1, 0.1],
+    //Added for green screen effect
+    u_image0:                gl.createTexture(),
+    u_image1:                gl.createTexture(),
+    //Added for warble
+    u_clock:                 0.0
   };
 
   var uniformsThatAreComputedForEachObject = {
@@ -219,7 +230,6 @@ function main(gl: WebGLRenderingContext, program: WebGLProgram) {
     u_worldInverseTranspose: mat4.create(),
   };
 
-  // var texture = .... create a texture of some form
 
   var baseColor = rand(240);
   var objectState = { 
@@ -240,12 +250,39 @@ function main(gl: WebGLRenderingContext, program: WebGLProgram) {
   var invMatrix = mat4.create();
   var axisVector = vec3.create();
   
+  //Creating our two textures
+  var texture1 = gl.createTexture();
+  var image1 = new Image();
+  image1.src = "resources/texture1.jpg";
+  image1.onload = function() {
+    gl.bindTexture(gl.TEXTURE_2D, texture1);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,gl.UNSIGNED_BYTE, image1);
+  };
+  
+  var texture2 = gl.createTexture();
+  var image2 = new Image();
+  image2.src = "resources/texture2.jpg";
+  image2.onload = function() {
+    gl.bindTexture(gl.TEXTURE_2D, texture2);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA,gl.UNSIGNED_BYTE, image2);
+  };
+
+  uniformsThatAreTheSameForAllObjects.u_image0 = texture1;
+  uniformsThatAreTheSameForAllObjects.u_image1 = texture2;
   requestAnimationFrame(drawScene);
 
   // Draw the scene.
   function drawScene(time: number) {
     time *= 0.001; 
-   
+    //console.log(uniformsThatAreTheSameForAllObjects.u_clock);
     // measure time taken for the little stats meter
     stats.begin();
 
@@ -273,15 +310,41 @@ function main(gl: WebGLRenderingContext, program: WebGLProgram) {
     // Make a view matrix from the camera matrix.
     mat4.invert(viewMatrix, cameraMatrix);
     
-    // tell WebGL to use our shader program (will need to change this)
-    gl.useProgram(program);
     
-    // Setup all the needed attributes and buffers.  
+    
+    // tell WebGL to use our shader program
+    if (currentShader == 1) {
+      gl.useProgram(program[0]);
+    } else if (currentShader == 2) {
+      gl.useProgram(program[1]);
+    } else if (currentShader == 3) {
+      gl.useProgram(program[2]);
+    } else {
+      gl.useProgram(program[3]);
+    }
+    
+    if (currentShader == 1) {
+    var uniformSetters = createUniformSetters(gl, program[0]);
+    var attribSetters  = createAttributeSetters(gl, program[0]);  
+  } else if (currentShader == 2) {
+    var uniformSetters = createUniformSetters(gl, program[1]);
+    var attribSetters  = createAttributeSetters(gl, program[1]);
+  } else if (currentShader == 3) {
+    var uniformSetters = createUniformSetters(gl, program[2]);
+    var attribSetters  = createAttributeSetters(gl, program[2]);
+  } else {
+    uniformsThatAreTheSameForAllObjects.u_clock = clock;
+    clock+=0.1;
+    var uniformSetters = createUniformSetters(gl, program[3]);
+    var attribSetters  = createAttributeSetters(gl, program[3]);
+  }
+
+    // Setup all the needed attributes and buffers. 
     setBuffersAndAttributes(gl, attribSetters, bufferInfo);
 
     // Set the uniforms that are the same for all objects.  Unlike the attributes, each uniform setter
     // is different, depending on the type of the uniform variable.  Look in webgl-util.js for the
-    // implementation of  setUniforms to see the details for specific types       
+    // implementation of  setUniforms to see the details for specific types           
     setUniforms(uniformSetters, uniformsThatAreTheSameForAllObjects);
    
     ///////////////////////////////////////////////////////
